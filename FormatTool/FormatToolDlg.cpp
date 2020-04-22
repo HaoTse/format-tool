@@ -28,11 +28,12 @@ CFormatToolDlg::CFormatToolDlg(CWnd* pParent /*=nullptr*/)
 void CFormatToolDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
+	DDX_Control(pDX, IDC_COMBO4, device_ctrl);
 	DDX_Control(pDX, IDC_COMBO1, setMBR_ctrl);
 	DDX_Control(pDX, IDC_COMBO2, fileSysType_ctrl);
 	DDX_Control(pDX, IDC_EDIT1, hidSec_ctrl);
 	DDX_Control(pDX, IDC_EDIT2, rsvdSec_ctrl);
-	DDX_Control(pDX, IDC_EDIT3, cluSize_ctrl);
+	DDX_Control(pDX, IDC_COMBO3, cluSize_ctrl);
 }
 
 BEGIN_MESSAGE_MAP(CFormatToolDlg, CDialogEx)
@@ -54,6 +55,10 @@ BOOL CFormatToolDlg::OnInitDialog()
 	// TODO: 在此加入額外的初始設定
 
 	// initial options
+	// set device combo box
+	device_ctrl.InsertString(0, _T("E:"));
+	device_ctrl.SetCurSel(0);
+
 	// set MBD combo box
 	setMBR_ctrl.InsertString(0, _T("Yes"));
 	setMBR_ctrl.InsertString(1, _T("No"));
@@ -61,15 +66,19 @@ BOOL CFormatToolDlg::OnInitDialog()
 	SetDropDownHeight(&setMBR_ctrl, 2);
 
 	// set file system combo box
-	//fileSysType_ctrl.InsertString(1, _T("FAT16")); // optional
-	fileSysType_ctrl.InsertString(0, _T("FAT32"));
-	//fileSysType_ctrl.InsertString(2, _T("exFAT")); // optional
-	fileSysType_ctrl.SetCurSel(0);
+	fileSysType_ctrl.InsertString(0, _T("FAT16")); // optional
+	fileSysType_ctrl.InsertString(1, _T("FAT32"));
+	fileSysType_ctrl.InsertString(2, _T("exFAT")); // optional
+	fileSysType_ctrl.SetCurSel(1);
 	SetDropDownHeight(&fileSysType_ctrl, 3);
 
 	// set edit control default
-	cluSize_ctrl.SetWindowText(_T("64"));
-
+	cluSize_ctrl.InsertString(0, _T("8192 Bytes"));
+	cluSize_ctrl.InsertString(1, _T("16 KB"));
+	cluSize_ctrl.InsertString(2, _T("32 KB"));
+	cluSize_ctrl.InsertString(3, _T("64 KB"));
+	cluSize_ctrl.SetCurSel(3);
+	SetDropDownHeight(&cluSize_ctrl, 4);
 
 	return TRUE;  // 傳回 TRUE，除非您對控制項設定焦點
 }

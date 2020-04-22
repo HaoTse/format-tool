@@ -35,5 +35,6 @@ public:
 	CComboBox fileSysType_ctrl;
 	CEdit hidSec_ctrl;
 	CEdit rsvdSec_ctrl;
-	CEdit cluSize_ctrl;
+	CComboBox cluSize_ctrl;
+	CComboBox device_ctrl;
 };
