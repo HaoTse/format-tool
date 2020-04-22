@@ -186,6 +186,7 @@
     <ClInclude Include="FormatTool.h" />
     <ClInclude Include="FormatToolDlg.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="Layout.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />

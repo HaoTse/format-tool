@@ -30,4 +30,10 @@ protected:
 	afx_msg void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
 	DECLARE_MESSAGE_MAP()
+public:
+	CComboBox setMBR_ctrl;
+	CComboBox fileSysType_ctrl;
+	CEdit hidSec_ctrl;
+	CEdit rsvdSec_ctrl;
+	CEdit cluSize_ctrl;
 };
