@@ -37,4 +37,5 @@ public:
 	CEdit rsvdSec_ctrl;
 	CComboBox cluSize_ctrl;
 	CComboBox device_ctrl;
+	afx_msg void OnBnClickedFormatbtn();
 };

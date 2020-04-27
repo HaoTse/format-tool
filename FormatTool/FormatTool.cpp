@@ -63,6 +63,7 @@ BOOL CFormatToolApp::InitInstance()
 	{
 		// TODO: 在此放置於使用 [確定] 來停止使用對話方塊時
 		// 處理的程式碼
+
 	}
 	else if (nResponse == IDCANCEL)
 	{

@@ -17,7 +17,42 @@
 
 // CFormatToolDlg 對話方塊
 
+int enum_usb_disk(char usb_paths[], int cnt)
+{
+	int usb_disk_cnt = 0;
 
+	char disk_path[5] = { 0 };
+	char device_path[10] = { 0 };
+	DWORD all_disk = GetLogicalDrives();
+
+	int i = 0;
+	DWORD bytes_returned = 0;
+	while (all_disk && usb_disk_cnt < cnt)
+	{
+		if ((all_disk & 0x1) == 1)
+		{
+			sprintf_s(disk_path, "%c:", 'A' + i);
+			sprintf_s(device_path, "\\\\.\\%s", disk_path);
+			if (GetDriveTypeA(disk_path) == DRIVE_REMOVABLE)
+			{
+				usb_paths[usb_disk_cnt++] = _T('A' + i);
+			}
+		}
+		all_disk = all_disk >> 1;
+		i++;
+	}
+
+	return usb_disk_cnt;
+}
+
+char* cstr2str(CString cstr) {
+	const size_t newsizew = (cstr.GetLength() + 1) * 2;
+	char* nstringw = new char[newsizew];
+	size_t convertedCharsw = 0;
+	wcstombs_s(&convertedCharsw, nstringw, newsizew, cstr, _TRUNCATE);
+
+	return nstringw;
+}
 
 CFormatToolDlg::CFormatToolDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_FORMATTOOL_DIALOG, pParent)
@@ -39,6 +74,7 @@ void CFormatToolDlg::DoDataExchange(CDataExchange* pDX)
 BEGIN_MESSAGE_MAP(CFormatToolDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
+	ON_BN_CLICKED(ID_Format_btn, &CFormatToolDlg::OnBnClickedFormatbtn)
 END_MESSAGE_MAP()
 
 // CFormatToolDlg 訊息處理常式
@@ -56,14 +92,20 @@ BOOL CFormatToolDlg::OnInitDialog()
 
 	// initial options
 	// set device combo box
-	device_ctrl.InsertString(0, _T("E:"));
-	device_ctrl.SetCurSel(0);
+	char usb_volume[8] = { 0 };
+	int usb_cnt = enum_usb_disk(usb_volume, 8);
+	for (int i = 0; i < usb_cnt; i++) {
+		CString text;
+		text.Format(_T("%c:"), usb_volume[i]);
+		device_ctrl.InsertString(i, text);
+	}
 
 	// set MBD combo box
 	setMBR_ctrl.InsertString(0, _T("Yes"));
 	setMBR_ctrl.InsertString(1, _T("No"));
 	setMBR_ctrl.SetCurSel(0);
 	SetDropDownHeight(&setMBR_ctrl, 2);
+
 
 	// set file system combo box
 	fileSysType_ctrl.InsertString(0, _T("FAT16")); // optional
@@ -119,3 +161,95 @@ HCURSOR CFormatToolDlg::OnQueryDragIcon()
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
+
+
+void CFormatToolDlg::OnBnClickedFormatbtn()
+{
+	// get value
+	CString text;
+	DWORD hidSec_num, rsvdSec_num, cluSize_val;
+	char* device_name;
+	bool setMBR_val;
+
+	// get selected device
+	int device_idx = device_ctrl.GetCurSel();
+	if (device_idx == CB_ERR) {
+		MessageBox(_T("Must select device."), _T("Error"), MB_ICONERROR);
+		return;
+	}
+	else {
+		device_ctrl.GetLBText(device_idx, text);
+		device_name = cstr2str(text);
+	}
+
+	// get MBR setup
+	int setMBR_idx = setMBR_ctrl.GetCurSel();
+	setMBR_val = setMBR_idx == 0 ? TRUE : FALSE;
+
+	// get hidden sector number
+	hidSec_ctrl.GetWindowText(text);
+	if (text.IsEmpty()) {
+		MessageBox(_T("Number of hidden sectors can't be empty."), _T("Error"), MB_ICONERROR);
+		return;
+	}
+	else {
+		hidSec_num = _ttoi(text);
+
+		if (hidSec_num < 0) {
+			MessageBox(_T("Number of hidden sectors can't be negative."), _T("Error"), MB_ICONERROR);
+			return;
+		}
+		else if (setMBR_val && hidSec_num < 1) {
+			MessageBox(_T("There must be at least 1 sector with MBR."), _T("Error"), MB_ICONERROR);
+			return;
+		}
+	}
+
+	// get reserved sector number
+	rsvdSec_ctrl.GetWindowText(text);
+	if (text.IsEmpty()) {
+		MessageBox(_T("Number of reserved sectors can't be empty."), _T("Error"), MB_ICONERROR);
+		return;
+	}
+	else {
+		rsvdSec_num = _ttoi(text);
+
+		if (rsvdSec_num < 0) {
+			MessageBox(_T("Number of reserved sectors can't be negative."), _T("Error"), MB_ICONERROR);
+			return;
+		}
+		else if (rsvdSec_num < 1) {
+			MessageBox(_T("There must be at least 1 sector with DBR."), _T("Error"), MB_ICONERROR);
+			return;
+		}
+	}
+
+	// get cluster size
+	int cluSize_idx = cluSize_ctrl.GetCurSel();
+	switch (cluSize_idx)
+	{
+	case 0:
+		cluSize_val = 8192;
+		break;
+	case 1:
+		cluSize_val = 16 * 1024;
+		break;
+	case 2:
+		cluSize_val = 32 * 1024;
+		break;
+	case 3:
+		cluSize_val = 64 * 1024;
+		break;
+	default:
+		cluSize_val = 64 * 1024;
+		break;
+	}
+
+	TRACE("\n[MSG] Selected device: %s\n", device_name);
+	TRACE(_T("\n[MSG] If set MBR: %s\n"), setMBR_val ? _T("Yes") : _T("No"));
+	TRACE(_T("\n[MSG] Hidden sector number: %u\n"), hidSec_num);
+	TRACE(_T("\n[MSG] Reserved sector number: %u\n"), rsvdSec_num);
+	TRACE(_T("\n[MSG] Cluster size: %u\n"), cluSize_val);
+
+	delete[] device_name;
+}
