@@ -38,4 +38,5 @@ public:
 	CComboBox cluSize_ctrl;
 	CComboBox device_ctrl;
 	afx_msg void OnBnClickedFormatbtn();
+	afx_msg void OnCbnSelchangeCombo1();
 };

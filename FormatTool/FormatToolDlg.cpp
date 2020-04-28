@@ -76,6 +76,7 @@ BEGIN_MESSAGE_MAP(CFormatToolDlg, CDialogEx)
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(ID_Format_btn, &CFormatToolDlg::OnBnClickedFormatbtn)
+	ON_CBN_SELCHANGE(IDC_COMBO1, &CFormatToolDlg::OnCbnSelchangeCombo1)
 END_MESSAGE_MAP()
 
 // CFormatToolDlg 訊息處理常式
@@ -116,12 +117,16 @@ BOOL CFormatToolDlg::OnInitDialog()
 	SetDropDownHeight(&fileSysType_ctrl, 3);
 
 	// set edit control default
-	cluSize_ctrl.InsertString(0, _T("8192 Bytes"));
-	cluSize_ctrl.InsertString(1, _T("16 KB"));
-	cluSize_ctrl.InsertString(2, _T("32 KB"));
-	cluSize_ctrl.InsertString(3, _T("64 KB"));
-	cluSize_ctrl.SetCurSel(3);
-	SetDropDownHeight(&cluSize_ctrl, 4);
+	cluSize_ctrl.InsertString(0, _T("512 Bytes"));
+	cluSize_ctrl.InsertString(1, _T("1 KB"));
+	cluSize_ctrl.InsertString(2, _T("2 KB"));
+	cluSize_ctrl.InsertString(3, _T("4 KB"));
+	cluSize_ctrl.InsertString(4, _T("8 KB"));
+	cluSize_ctrl.InsertString(5, _T("16 KB"));
+	cluSize_ctrl.InsertString(6, _T("32 KB"));
+	cluSize_ctrl.InsertString(7, _T("64 KB"));
+	cluSize_ctrl.SetCurSel(7);
+	SetDropDownHeight(&cluSize_ctrl, 5);
 
 	return TRUE;  // 傳回 TRUE，除非您對控制項設定焦點
 }
@@ -223,6 +228,11 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 			MessageBox(_T("There must be at least 1 sector with DBR."), _T("Error"), MB_ICONERROR);
 			return;
 		}
+		else if (rsvdSec_num > 0xFFFF) {
+			// Hidden sector is only 2Bytes
+			MessageBox(_T("Hidden sector is too large."), _T("Error"), MB_ICONERROR);
+			return;
+		}
 	}
 
 	// get cluster size
@@ -230,19 +240,31 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 	switch (cluSize_idx)
 	{
 	case 0:
-		cluSize_val = 8192;
+		cluSize_val = 512;
 		break;
 	case 1:
-		cluSize_val = 16 * 1024;
+		cluSize_val = (1 << 10);
 		break;
 	case 2:
-		cluSize_val = 32 * 1024;
+		cluSize_val = 2 * (1 << 10);
 		break;
 	case 3:
-		cluSize_val = 64 * 1024;
+		cluSize_val = 4 * (1 << 10);
+		break;
+	case 4:
+		cluSize_val = 8 * (1 << 10);
+		break;
+	case 5:
+		cluSize_val = 16 * (1 << 10);
+		break;
+	case 6:
+		cluSize_val = 32 * (1 << 10);
+		break;
+	case 7:
+		cluSize_val = 64 * (1 << 10);
 		break;
 	default:
-		cluSize_val = 64 * 1024;
+		cluSize_val = 64 * (1 << 10);
 		break;
 	}
 
@@ -277,5 +299,20 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 	}
 	else {
 		MessageBox(_T("Format failed."), _T("Error"), MB_ICONERROR);
+	}
+}
+
+
+void CFormatToolDlg::OnCbnSelchangeCombo1()
+{
+	// TODO: Add your control notification handler code here
+	int setMBR_idx = setMBR_ctrl.GetCurSel();
+
+	if (setMBR_idx == 0) {
+		hidSec_ctrl.EnableWindow(TRUE);
+	}
+	else {
+		hidSec_ctrl.SetWindowText(_T("0"));
+		hidSec_ctrl.EnableWindow(FALSE);
 	}
 }
