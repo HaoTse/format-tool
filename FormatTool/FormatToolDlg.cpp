@@ -9,6 +9,7 @@
 #include "afxdialogex.h"
 
 #include "Layout.h"
+#include "format.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -251,5 +252,30 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 	TRACE(_T("\n[MSG] Reserved sector number: %u\n"), rsvdSec_num);
 	TRACE(_T("\n[MSG] Cluster size: %u\n"), cluSize_val);
 
+	// initial device handle
+	HANDLE hDevice = getHandle(device_name);
+	if (hDevice == INVALID_HANDLE_VALUE) {
+		MessageBox(_T("Open device failed."), _T("Error"), MB_ICONERROR);
+		CloseHandle(hDevice);
+		return;
+	}
+
+	DWORD capacity_sec = getCapacity(hDevice);
+	if (capacity_sec == 0) {
+		MessageBox(_T("Get capacity failed."), _T("Error"), MB_ICONERROR);
+		CloseHandle(hDevice);
+		return;
+	}
+
+	bool ret = format(hDevice, capacity_sec, setMBR_val, hidSec_num, rsvdSec_num, cluSize_val);
+	CloseHandle(hDevice);
+
 	delete[] device_name;
+
+	if(ret){
+		MessageBox(_T("Format succeeded."), _T("Information"), MB_ICONINFORMATION);
+	}
+	else {
+		MessageBox(_T("Format failed."), _T("Error"), MB_ICONERROR);
+	}
 }
