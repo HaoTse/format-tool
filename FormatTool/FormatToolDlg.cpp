@@ -328,3 +328,8 @@ void CFormatToolDlg::OnCbnSelchangeCombo1()
 		hidSec_ctrl.EnableWindow(FALSE);
 	}
 }
+
+void CFormatToolDlg::OnOK()
+{
+	OnBnClickedFormatbtn();
+}

@@ -39,4 +39,5 @@ public:
 	CComboBox device_ctrl;
 	afx_msg void OnBnClickedFormatbtn();
 	afx_msg void OnCbnSelchangeCombo1();
+	void OnOK(); //override
 };
