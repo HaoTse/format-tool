@@ -282,6 +282,18 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 		return;
 	}
 
+	// check upper limitation of hidden + reserved
+	DWORD capacity = getCapacity(hDevice);
+	DWORD secPerClu = cluSize_val / PHYSICAL_SECTOR_SIZE;
+	DWORD must_rsvd_sec = 2 + 6 * secPerClu; // 2 sector for FAT and 6 cluster for system files
+	if (hidSec_num + rsvdSec_num + must_rsvd_sec > capacity) {
+		CString msg;
+		msg.Format(_T("Upper bound number of hidden sector and rsvd sector: %u"), capacity - must_rsvd_sec);
+		MessageBox(msg, _T("Error"), MB_ICONERROR);
+		CloseHandle(hDevice);
+		return;
+	}
+
 	DWORD capacity_sec = getCapacity(hDevice);
 	if (capacity_sec == 0) {
 		MessageBox(_T("Get capacity failed."), _T("Error"), MB_ICONERROR);

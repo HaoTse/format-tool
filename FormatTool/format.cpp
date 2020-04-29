@@ -245,7 +245,7 @@ BOOL format(HANDLE hDevice, DWORD sectorsNum, bool ifMBR, DWORD hid_sec_num, DWO
 
 	// format DBR
 	BYTE DBR_buf[PHYSICAL_SECTOR_SIZE];
-	DWORD DBR_offset = hid_sec_num * PHYSICAL_SECTOR_SIZE;
+	ULONGLONG DBR_offset = (ULONGLONG)hid_sec_num * PHYSICAL_SECTOR_SIZE;
 	memset(DBR_buf, 0, PHYSICAL_SECTOR_SIZE);
 	setupDBR(DBR_buf, sectorsNum, hid_sec_num, rsvd_sec_num, clu_size);
 	if (!SCSISectorIO(hDevice, DBR_offset, DBR_buf, PHYSICAL_SECTOR_SIZE, TRUE)) {
