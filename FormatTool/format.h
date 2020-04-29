@@ -11,7 +11,7 @@ ULONGLONG computeFATSz(DWORD total_sec, DWORD hid_sec, DWORD rsvd_sec, DWORD clu
 
 void setupDBR(BYTE* buffer, DWORD total_num, DWORD hidden_num, DWORD rsvd_num, DWORD clu_size);
 
-HANDLE getHandle(char* device_name);
+HANDLE getHandle(char device_name);
 
 DWORD getCapacity(HANDLE hDevice);
 

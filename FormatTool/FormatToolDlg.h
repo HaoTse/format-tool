@@ -40,4 +40,5 @@ public:
 	afx_msg void OnBnClickedFormatbtn();
 	afx_msg void OnCbnSelchangeCombo1();
 	void OnOK(); //override
+	afx_msg void OnCbnDropdownCombo4();
 };

@@ -131,12 +131,12 @@ void setupDBR(BYTE* buffer, DWORD total_num, DWORD hidden_num, DWORD rsvd_num, D
 	memcpy(buffer + sig_offset, sig, sizeof(sig));
 }
 
-HANDLE getHandle(char* device_name) {
+HANDLE getHandle(char device_name) {
 	char device_path[10];
 	HANDLE hDevice;
 
 	// initial handle of USB
-	sprintf_s(device_path, "\\\\.\\%s", device_name);
+	sprintf_s(device_path, "\\\\.\\%c:", device_name);
 	hDevice = CreateFileA(device_path,
 		GENERIC_READ | GENERIC_WRITE,
 		FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -162,7 +162,7 @@ DWORD getCapacity(HANDLE hDevice) {
 	// get capacity
 	retVal = SCSIReadCapacity(hDevice, capacityBuf);
 	if (!retVal) {
-		TRACE("\n[Error] Reaf capacity fail. Error Code = % u\n", GetLastError());
+		TRACE("\n[Error] Read capacity fail. Error Code = % u\n", GetLastError());
 		return 0;
 	}
 
@@ -175,6 +175,10 @@ DWORD getCapacity(HANDLE hDevice) {
 	TRACE("\n[Info] Read capcaity success.\n");
 	TRACE("\n[Msg] Sectors number: % d\n", sectorsNum);
 	TRACE("\n[Msg] Bytes per sectors: % d\n", bytesPerSecotr);
+
+	if (bytesPerSecotr != PHYSICAL_SECTOR_SIZE) {
+		TRACE("\n[Warn] PHYSICAL_SECTOR_SIZE is not equal to block length!\n");
+	}
 
 	return sectorsNum;
 }

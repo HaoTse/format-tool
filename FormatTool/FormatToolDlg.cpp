@@ -18,12 +18,11 @@
 
 // CFormatToolDlg 對話方塊
 
-int enum_usb_disk(char usb_paths[], int cnt)
+int enum_usb_disk(char usb_paths[], DWORD usb_capacity[], int cnt)
 {
 	int usb_disk_cnt = 0;
 
 	char disk_path[5] = { 0 };
-	char device_path[10] = { 0 };
 	DWORD all_disk = GetLogicalDrives();
 
 	int i = 0;
@@ -33,10 +32,27 @@ int enum_usb_disk(char usb_paths[], int cnt)
 		if ((all_disk & 0x1) == 1)
 		{
 			sprintf_s(disk_path, "%c:", 'A' + i);
-			sprintf_s(device_path, "\\\\.\\%s", disk_path);
+
+
 			if (GetDriveTypeA(disk_path) == DRIVE_REMOVABLE)
 			{
-				usb_paths[usb_disk_cnt++] = _T('A' + i);
+				// get device capacity
+				HANDLE hDevice = getHandle('A' + i);
+				if (hDevice == INVALID_HANDLE_VALUE) {
+					TRACE("Open %s failed.", disk_path);
+					CloseHandle(hDevice);
+					return -1;
+				}
+				DWORD capacity_sec = getCapacity(hDevice);
+				if (capacity_sec == 0) {
+					CloseHandle(hDevice);
+					continue; // skip invalid device (include card reader)
+				}
+
+				usb_paths[usb_disk_cnt] = 'A' + i;
+				usb_capacity[usb_disk_cnt++] = capacity_sec;
+
+				CloseHandle(hDevice);
 			}
 		}
 		all_disk = all_disk >> 1;
@@ -77,6 +93,7 @@ BEGIN_MESSAGE_MAP(CFormatToolDlg, CDialogEx)
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(ID_Format_btn, &CFormatToolDlg::OnBnClickedFormatbtn)
 	ON_CBN_SELCHANGE(IDC_COMBO1, &CFormatToolDlg::OnCbnSelchangeCombo1)
+	ON_CBN_DROPDOWN(IDC_COMBO4, &CFormatToolDlg::OnCbnDropdownCombo4)
 END_MESSAGE_MAP()
 
 // CFormatToolDlg 訊息處理常式
@@ -93,21 +110,12 @@ BOOL CFormatToolDlg::OnInitDialog()
 	// TODO: 在此加入額外的初始設定
 
 	// initial options
-	// set device combo box
-	char usb_volume[8] = { 0 };
-	int usb_cnt = enum_usb_disk(usb_volume, 8);
-	for (int i = 0; i < usb_cnt; i++) {
-		CString text;
-		text.Format(_T("%c:"), usb_volume[i]);
-		device_ctrl.InsertString(i, text);
-	}
 
 	// set MBD combo box
 	setMBR_ctrl.InsertString(0, _T("Yes"));
 	setMBR_ctrl.InsertString(1, _T("No"));
 	setMBR_ctrl.SetCurSel(0);
 	SetDropDownHeight(&setMBR_ctrl, 2);
-
 
 	// set file system combo box
 	fileSysType_ctrl.InsertString(0, _T("FAT16")); // optional
@@ -174,7 +182,7 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 	// get value
 	CString text;
 	DWORD hidSec_num, rsvdSec_num, cluSize_val;
-	char* device_name;
+	char device_name;
 	bool setMBR_val;
 
 	// get selected device
@@ -184,8 +192,11 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 		return;
 	}
 	else {
+		char* device_name_w_capacity;
 		device_ctrl.GetLBText(device_idx, text);
-		device_name = cstr2str(text);
+		device_name_w_capacity = cstr2str(text);
+		device_name = device_name_w_capacity[0];
+		delete[] device_name_w_capacity;
 	}
 
 	// get MBR setup
@@ -268,7 +279,7 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 		break;
 	}
 
-	TRACE("\n[MSG] Selected device: %s\n", device_name);
+	TRACE("\n[MSG] Selected device: %c:\n", device_name);
 	TRACE(_T("\n[MSG] If set MBR: %s\n"), setMBR_val ? _T("Yes") : _T("No"));
 	TRACE(_T("\n[MSG] Hidden sector number: %u\n"), hidSec_num);
 	TRACE(_T("\n[MSG] Reserved sector number: %u\n"), rsvdSec_num);
@@ -283,18 +294,17 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 	}
 
 	// check upper limitation of hidden + reserved
-	DWORD capacity = getCapacity(hDevice);
+	DWORD capacity_sec = getCapacity(hDevice);
 	DWORD secPerClu = cluSize_val / PHYSICAL_SECTOR_SIZE;
 	DWORD must_rsvd_sec = 2 + 6 * secPerClu; // 2 sector for FAT and 6 cluster for system files
-	if (hidSec_num + rsvdSec_num + must_rsvd_sec > capacity) {
+	if (hidSec_num + rsvdSec_num + must_rsvd_sec > capacity_sec) {
 		CString msg;
-		msg.Format(_T("Upper bound number of hidden sector and rsvd sector: %u"), capacity - must_rsvd_sec);
+		msg.Format(_T("Upper bound number of hidden sector and rsvd sector: %u"), capacity_sec - must_rsvd_sec);
 		MessageBox(msg, _T("Error"), MB_ICONERROR);
 		CloseHandle(hDevice);
 		return;
 	}
 
-	DWORD capacity_sec = getCapacity(hDevice);
 	if (capacity_sec == 0) {
 		MessageBox(_T("Get capacity failed."), _T("Error"), MB_ICONERROR);
 		CloseHandle(hDevice);
@@ -304,8 +314,6 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 	bool ret = format(hDevice, capacity_sec, setMBR_val, hidSec_num, rsvdSec_num, cluSize_val);
 	CloseHandle(hDevice);
 
-	delete[] device_name;
-
 	if(ret){
 		MessageBox(_T("Format succeeded."), _T("Information"), MB_ICONINFORMATION);
 	}
@@ -314,6 +322,10 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 	}
 }
 
+void CFormatToolDlg::OnOK()
+{
+	OnBnClickedFormatbtn();
+}
 
 void CFormatToolDlg::OnCbnSelchangeCombo1()
 {
@@ -329,7 +341,31 @@ void CFormatToolDlg::OnCbnSelchangeCombo1()
 	}
 }
 
-void CFormatToolDlg::OnOK()
+void CFormatToolDlg::OnCbnDropdownCombo4()
 {
-	OnBnClickedFormatbtn();
+	// empty options
+	device_ctrl.ResetContent();
+	
+	// set device combo box
+	char usb_volume[8] = { 0 };
+	DWORD usb_capacity_sec[8];
+	int usb_cnt = enum_usb_disk(usb_volume, usb_capacity_sec, 8);
+	if (usb_cnt == -1) {
+		MessageBox(_T("Enumerate usb disk failed."), _T("Error"), MB_ICONERROR);
+	}
+	else {
+		for (int i = 0; i < usb_cnt; i++) {
+			CString text;
+			DWORD capacity_MB = (usb_capacity_sec[i] >> 20) * PHYSICAL_SECTOR_SIZE; // MB
+			if (capacity_MB > 1024) {
+				double capacity_GB = (double)capacity_MB / 1024;
+				text.Format(_T("%c: (%.1f GB)"), usb_volume[i], capacity_GB);
+			}
+			else {
+				text.Format(_T("%c: (%u MB)"), usb_volume[i], capacity_MB);
+			}
+			device_ctrl.InsertString(i, text);
+		}
+	}
+	SetDropDownHeight(&device_ctrl, usb_cnt);
 }
