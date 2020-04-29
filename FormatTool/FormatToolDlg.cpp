@@ -126,15 +126,13 @@ BOOL CFormatToolDlg::OnInitDialog()
 
 	// set edit control default
 	cluSize_ctrl.InsertString(0, _T("512 Bytes"));
-	cluSize_ctrl.InsertString(1, _T("1 KB"));
-	cluSize_ctrl.InsertString(2, _T("2 KB"));
-	cluSize_ctrl.InsertString(3, _T("4 KB"));
-	cluSize_ctrl.InsertString(4, _T("8 KB"));
-	cluSize_ctrl.InsertString(5, _T("16 KB"));
-	cluSize_ctrl.InsertString(6, _T("32 KB"));
-	cluSize_ctrl.InsertString(7, _T("64 KB"));
+	for (int i = 0; i <= 6; i++) {
+		CString str;
+		str.Format(_T("%d KB"), 1 << i);
+		cluSize_ctrl.InsertString(i + 1, str);
+	}
 	cluSize_ctrl.SetCurSel(7);
-	SetDropDownHeight(&cluSize_ctrl, 5);
+	SetDropDownHeight(&cluSize_ctrl, 8);
 
 	return TRUE;  // 傳回 TRUE，除非您對控制項設定焦點
 }
@@ -195,7 +193,7 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 		char* device_name_w_capacity;
 		device_ctrl.GetLBText(device_idx, text);
 		device_name_w_capacity = cstr2str(text);
-		device_name = device_name_w_capacity[0];
+		device_name = device_name_w_capacity[0]; // only store the identifier
 		delete[] device_name_w_capacity;
 	}
 
@@ -248,36 +246,7 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 
 	// get cluster size
 	int cluSize_idx = cluSize_ctrl.GetCurSel();
-	switch (cluSize_idx)
-	{
-	case 0:
-		cluSize_val = 512;
-		break;
-	case 1:
-		cluSize_val = (1 << 10);
-		break;
-	case 2:
-		cluSize_val = 2 * (1 << 10);
-		break;
-	case 3:
-		cluSize_val = 4 * (1 << 10);
-		break;
-	case 4:
-		cluSize_val = 8 * (1 << 10);
-		break;
-	case 5:
-		cluSize_val = 16 * (1 << 10);
-		break;
-	case 6:
-		cluSize_val = 32 * (1 << 10);
-		break;
-	case 7:
-		cluSize_val = 64 * (1 << 10);
-		break;
-	default:
-		cluSize_val = 64 * (1 << 10);
-		break;
-	}
+	cluSize_val = (1 << (9 + cluSize_idx));
 
 	TRACE("\n[MSG] Selected device: %c:\n", device_name);
 	TRACE(_T("\n[MSG] If set MBR: %s\n"), setMBR_val ? _T("Yes") : _T("No"));
@@ -294,24 +263,24 @@ void CFormatToolDlg::OnBnClickedFormatbtn()
 	}
 
 	// check upper limitation of hidden + reserved
-	DWORD capacity_sec = getCapacity(hDevice);
-	DWORD secPerClu = cluSize_val / PHYSICAL_SECTOR_SIZE;
-	DWORD must_rsvd_sec = 2 + 6 * secPerClu; // 2 sector for FAT and 6 cluster for system files
-	if (hidSec_num + rsvdSec_num + must_rsvd_sec > capacity_sec) {
+	DWORD capacity_in_sec = getCapacity(hDevice);
+	DWORD sec_per_clu = cluSize_val / PHYSICAL_SECTOR_SIZE;
+	DWORD must_rsvd_sec = 2 + 6 * sec_per_clu; // 2 sector for FAT and 6 cluster for system files
+	if (hidSec_num + rsvdSec_num + must_rsvd_sec > capacity_in_sec) {
 		CString msg;
-		msg.Format(_T("Upper bound number of hidden sector and rsvd sector: %u"), capacity_sec - must_rsvd_sec);
+		msg.Format(_T("Maximum of hidden sector and rsvd sector: %u"), capacity_in_sec - must_rsvd_sec);
 		MessageBox(msg, _T("Error"), MB_ICONERROR);
 		CloseHandle(hDevice);
 		return;
 	}
 
-	if (capacity_sec == 0) {
+	if (capacity_in_sec == 0) {
 		MessageBox(_T("Get capacity failed."), _T("Error"), MB_ICONERROR);
 		CloseHandle(hDevice);
 		return;
 	}
 
-	bool ret = format(hDevice, capacity_sec, setMBR_val, hidSec_num, rsvdSec_num, cluSize_val);
+	bool ret = format(hDevice, capacity_in_sec, setMBR_val, hidSec_num, rsvdSec_num, cluSize_val);
 	CloseHandle(hDevice);
 
 	if(ret){
@@ -356,7 +325,7 @@ void CFormatToolDlg::OnCbnDropdownCombo4()
 	else {
 		for (int i = 0; i < usb_cnt; i++) {
 			CString text;
-			DWORD capacity_MB = (usb_capacity_sec[i] >> 20) * PHYSICAL_SECTOR_SIZE; // MB
+			DWORD capacity_MB = (usb_capacity_sec[i] >> 20) * PHYSICAL_SECTOR_SIZE;
 			if (capacity_MB > 1024) {
 				double capacity_GB = (double)capacity_MB / 1024;
 				text.Format(_T("%c: (%.1f GB)"), usb_volume[i], capacity_GB);

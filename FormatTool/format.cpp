@@ -38,13 +38,6 @@ void setupMBR(BYTE* buffer, DWORD total_num, DWORD hidden_num) {
 	memcpy(buffer + sign_offset, sign, 2);
 }
 
-ULONGLONG computeFATSz(DWORD total_sec, DWORD hid_sec, DWORD rsvd_sec, DWORD clu_size, DWORD byte_per_sec, DWORD FAT_num) {
-	ULONGLONG free_sec = total_sec - hid_sec - rsvd_sec;
-	ULONGLONG denominator = (((ULONGLONG)free_sec * 4) + 8 * ((ULONGLONG)clu_size / byte_per_sec)),
-			decimal = (ULONGLONG)clu_size + 8;
-	return (ULONGLONG)ceil((double)denominator / decimal);
-}
-
 void setupDBR(BYTE* buffer, DWORD total_num, DWORD hidden_num, DWORD rsvd_num, DWORD clu_size) {
 	DWORD jumpBoot_offset = 0x0, OEMName_offset = 0x3, bytePerSec_offset = 0xB, secPerClu_offset = 0xD,
 			rsvdSecCnt_offset = 0xE, numFATs_offset = 0x10, rootEntCnt_offset = 0x11, totSec16_offset = 0x13,
@@ -131,6 +124,13 @@ void setupDBR(BYTE* buffer, DWORD total_num, DWORD hidden_num, DWORD rsvd_num, D
 	memcpy(buffer + sig_offset, sig, sizeof(sig));
 }
 
+ULONGLONG computeFATSz(DWORD total_sec, DWORD hid_sec, DWORD rsvd_sec, DWORD clu_size, DWORD byte_per_sec, DWORD FAT_num) {
+	ULONGLONG free_sec = total_sec - hid_sec - rsvd_sec;
+	ULONGLONG denominator = (((ULONGLONG)free_sec * 4) + 8 * ((ULONGLONG)clu_size / byte_per_sec)),
+		decimal = (ULONGLONG)clu_size + 8;
+	return (ULONGLONG)ceil((double)denominator / decimal);
+}
+
 HANDLE getHandle(char device_name) {
 	char device_path[10];
 	HANDLE hDevice;
@@ -155,151 +155,107 @@ HANDLE getHandle(char device_name) {
 }
 
 DWORD getCapacity(HANDLE hDevice) {
-	DWORD sectorsNum, bytesPerSecotr; // volume information
-	BYTE capacityBuf[8];
-	int retVal;
+	DWORD sectors_num, bytesPerSecotr; // volume information
+	BYTE capacity_buf[8];
 
 	// get capacity
-	retVal = SCSIReadCapacity(hDevice, capacityBuf);
-	if (!retVal) {
+	int ret = SCSIReadCapacity(hDevice, capacity_buf);
+	if (!ret) {
 		TRACE("\n[Error] Read capacity fail. Error Code = % u\n", GetLastError());
 		return 0;
 	}
 
 	// RETURNED LOGICAL BLOCK ADDRESS
-	sectorsNum = capacityBuf[0] * (1 << 24) + capacityBuf[1] * (1 << 16)
-		+ capacityBuf[2] * (1 << 8) + capacityBuf[3] + 1;
+	sectors_num = capacity_buf[0] * (1 << 24) + capacity_buf[1] * (1 << 16)
+		+ capacity_buf[2] * (1 << 8) + capacity_buf[3] + 1;
 	// BLOCK LENGTH IN BYTES
-	bytesPerSecotr = capacityBuf[4] * (1 << 24) + capacityBuf[5] * (1 << 16)
-		+ capacityBuf[6] * (1 << 8) + capacityBuf[7];
+	bytesPerSecotr = capacity_buf[4] * (1 << 24) + capacity_buf[5] * (1 << 16)
+		+ capacity_buf[6] * (1 << 8) + capacity_buf[7];
 	TRACE("\n[Info] Read capcaity success.\n");
-	TRACE("\n[Msg] Sectors number: % d\n", sectorsNum);
+	TRACE("\n[Msg] Sectors number: % d\n", sectors_num);
 	TRACE("\n[Msg] Bytes per sectors: % d\n", bytesPerSecotr);
 
 	if (bytesPerSecotr != PHYSICAL_SECTOR_SIZE) {
 		TRACE("\n[Warn] PHYSICAL_SECTOR_SIZE is not equal to block length!\n");
 	}
 
-	return sectorsNum;
+	return sectors_num;
 }
 
-BOOL formatRegion(HANDLE hDevice, ULONGLONG offset, ULONGLONG size) {
-	/*
-	 * Format the entire continues region to 0.
-	 * Parameters: offset is in bytes, and size are in sectors.
-	 */
+BOOL format(HANDLE hDevice, DWORD totalSec_num, bool ifMBR, DWORD hidSec_num, DWORD rsvdSec_num, DWORD clu_size) {
+	DWORD bytes_returned = 0;
 
-	// format needed bytes to 0
-	DWORD max_buf_size = getMaxTransfLen(hDevice) * 100;
-	BYTE* data_buf = new BYTE[max_buf_size];
-	memset(data_buf, 0, max_buf_size);
-	DWORD turns = (DWORD)(size / (max_buf_size / PHYSICAL_SECTOR_SIZE));
-	DWORD remainder = (DWORD)(size % (max_buf_size / PHYSICAL_SECTOR_SIZE));
-	for (DWORD i = 0; i < turns; i++) {
-		if (!SCSISectorIO(hDevice, offset + (ULONGLONG)max_buf_size * i, data_buf, max_buf_size, TRUE)) {
-			return FALSE;
-		}
-	}
-	if (remainder > 0) {
-		if (!SCSISectorIO(hDevice, offset + (ULONGLONG)max_buf_size * turns, data_buf, remainder * PHYSICAL_SECTOR_SIZE, TRUE)) {
-			return FALSE;
-		}
-	}
-
-	delete[] data_buf;
-
-	return TRUE;
-}
-
-BOOL format(HANDLE hDevice, DWORD sectorsNum, bool ifMBR, DWORD hid_sec_num, DWORD rsvd_sec_num, DWORD clu_size) {
-	DWORD bytesReturned = 0;
-
-	// Lock the volume
-	if (!DeviceIoControl(hDevice, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0, &bytesReturned, NULL)) {
+	// lock volume
+	if (!DeviceIoControl(hDevice, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0, &bytes_returned, NULL)) {
 		TRACE("\n[Error] FSCTL_LOCK_VOLUME failed. Error code = %u\n", GetLastError());
 		return FALSE;
-	}
-
-	// format hidden
-	if (hid_sec_num > 0) {
-		DWORD tmp = hid_sec_num > 10 ? 10 : hid_sec_num;
-		if (!formatRegion(hDevice, 0, tmp)) {
-			TRACE("\n[Error] Format hidden failed.\n");
-			return FALSE;
-		}
 	}
 
 	// format MBR
 	if (ifMBR) {
 		BYTE MBR_buf[PHYSICAL_SECTOR_SIZE];
 		memset(MBR_buf, 0, PHYSICAL_SECTOR_SIZE);
-		setupMBR(MBR_buf, sectorsNum, hid_sec_num);
+		setupMBR(MBR_buf, totalSec_num, hidSec_num);
 		if (!SCSISectorIO(hDevice, 0, MBR_buf, PHYSICAL_SECTOR_SIZE, TRUE)) {
 			TRACE("\n[Error] Format MBR failed.\n");
 			return FALSE;
 		}
 	}
 
-	// format FSINFO and BK (reserved)
-	ULONGLONG hid_offset = (ULONGLONG)hid_sec_num * PHYSICAL_SECTOR_SIZE;
-	if (!formatRegion(hDevice, hid_offset, rsvd_sec_num)) {
-		TRACE("\n[Error] Format reserved failed.\n");
-		return FALSE;
-	}
+	// format DBR, FSINFO, and backup
+	DWORD rsvd_format_sec = (rsvdSec_num > 10) ? 10 : rsvdSec_num;
+	ULONGLONG rsvd_buf_size = (ULONGLONG)rsvd_format_sec * PHYSICAL_SECTOR_SIZE,
+			rsvd_offset = (ULONGLONG)hidSec_num * PHYSICAL_SECTOR_SIZE;
+	BYTE* rsvd_buf_ptr = new BYTE[rsvd_buf_size];
+	memset(rsvd_buf_ptr, 0, rsvd_buf_size); // initial to 0
 
-	// format DBR
+	// initial DBR
 	BYTE DBR_buf[PHYSICAL_SECTOR_SIZE];
-	ULONGLONG DBR_offset = (ULONGLONG)hid_sec_num * PHYSICAL_SECTOR_SIZE;
 	memset(DBR_buf, 0, PHYSICAL_SECTOR_SIZE);
-	setupDBR(DBR_buf, sectorsNum, hid_sec_num, rsvd_sec_num, clu_size);
-	if (!SCSISectorIO(hDevice, DBR_offset, DBR_buf, PHYSICAL_SECTOR_SIZE, TRUE)) {
+	setupDBR(DBR_buf, totalSec_num, hidSec_num, rsvdSec_num, clu_size);
+	memcpy(rsvd_buf_ptr, DBR_buf, PHYSICAL_SECTOR_SIZE);
+
+	if (!SCSISectorIO(hDevice, rsvd_offset, rsvd_buf_ptr, rsvd_buf_size, TRUE)) {
 		TRACE("\n[Error] Format DBR failed.\n");
 		return FALSE;
 	}
+	
+	delete[] rsvd_buf_ptr;
+
 
 	// format FAT
-	ULONGLONG FAT_offset = ((ULONGLONG)hid_sec_num + rsvd_sec_num) * PHYSICAL_SECTOR_SIZE;
-	ULONGLONG FATSz = computeFATSz(sectorsNum, hid_sec_num, rsvd_sec_num, clu_size, PHYSICAL_SECTOR_SIZE, 2);
-	BYTE FAT_init[PHYSICAL_SECTOR_SIZE] = { 0 };
-	FAT_init[0] = 0xF8;
-	FAT_init[1] = 0xFF;
-	FAT_init[2] = 0xFF;
-	FAT_init[3] = 0x0F;
-	FAT_init[4] = 0xFF;
-	FAT_init[5] = 0xFF;
-	FAT_init[6] = 0xFF;
-	FAT_init[7] = 0xFF;
-	FAT_init[8] = 0xFF;
-	FAT_init[9] = 0xFF;
-	FAT_init[10] = 0xFF;
-	FAT_init[11] = 0x0F;
-	if (!formatRegion(hDevice, FAT_offset, FATSz * 2)) {
+	ULONGLONG FAT_offset = rsvd_offset + (ULONGLONG)rsvdSec_num * PHYSICAL_SECTOR_SIZE;
+	ULONGLONG FATSz = computeFATSz(totalSec_num, hidSec_num, rsvdSec_num, clu_size, PHYSICAL_SECTOR_SIZE, 2) * PHYSICAL_SECTOR_SIZE;
+	BYTE FAT_entry[12] = { 0xF8, 0xFF, 0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F };
+	BYTE* FAT_buf_ptr = new BYTE[FATSz * 2];
+	memset(FAT_buf_ptr, 0, FATSz * 2); // initial to 0
+	memcpy(FAT_buf_ptr, FAT_entry, 12);
+	memcpy(FAT_buf_ptr + FATSz, FAT_entry, 12);
+	if (!SCSISectorIO(hDevice, FAT_offset, FAT_buf_ptr, FATSz * 2, TRUE)) {
 		TRACE("\n[Error] Format FAT failed.\n");
 		return FALSE;
 	}
-	if (!SCSISectorIO(hDevice, FAT_offset, FAT_init, 12, TRUE)) {
-		TRACE("\n[Error] Format FAT1 failed.\n");
-		return FALSE;
-	}
-	if (!SCSISectorIO(hDevice, FAT_offset + ((ULONGLONG)FATSz * PHYSICAL_SECTOR_SIZE), FAT_init, 12, TRUE)) {
-		TRACE("\n[Error] Format FAT2 failed.\n");
-		return FALSE;
-	}
+
+	delete[] FAT_buf_ptr;
 
 	// format 2nd cluster (Root)
-	ULONGLONG rsvd_offset = (ULONGLONG)rsvd_sec_num * PHYSICAL_SECTOR_SIZE;
-	ULONGLONG heap_offset = hid_offset + rsvd_offset + FATSz * PHYSICAL_SECTOR_SIZE * 2;
-	DWORD clu_size_in_secotr = clu_size / PHYSICAL_SECTOR_SIZE;
-	if (!formatRegion(hDevice, heap_offset, clu_size_in_secotr)) {
-		TRACE("\n[Error] Format Root cluster failed.\n");
+	ULONGLONG heap_offset = FAT_offset + FATSz * PHYSICAL_SECTOR_SIZE * 2;
+	BYTE* heap_buf_ptr = new BYTE[clu_size];
+	memset(heap_buf_ptr, 0, clu_size); // initial to 0
+	if (!SCSISectorIO(hDevice, heap_offset, heap_buf_ptr, clu_size, TRUE)) {
+		TRACE("\n[Error] Format ROOT cluster failed.\n");
 		return FALSE;
 	}
 
-	if (!DeviceIoControl(hDevice, FSCTL_DISMOUNT_VOLUME, NULL, 0, NULL, 0, &bytesReturned, NULL)) {
+	delete[] heap_buf_ptr;
+
+	// dismount volume
+	if (!DeviceIoControl(hDevice, FSCTL_DISMOUNT_VOLUME, NULL, 0, NULL, 0, &bytes_returned, NULL)) {
 		TRACE("\n[Error] FSCTL_DISMOUNT_VOLUME failed. Error code = %u\n", GetLastError());
 		return FALSE;
 	}
-	if (!DeviceIoControl(hDevice, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0, &bytesReturned, NULL)) {
+	// unlock volume
+	if (!DeviceIoControl(hDevice, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0, &bytes_returned, NULL)) {
 		TRACE("\n[Error] FSCTL_UNLOCK_VOLUME failed. Error code = %u\n", GetLastError());
 		return FALSE;
 	}
