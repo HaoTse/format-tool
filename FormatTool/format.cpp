@@ -239,7 +239,7 @@ BOOL format(HANDLE hDevice, DWORD totalSec_num, bool ifMBR, DWORD hidSec_num, DW
 	delete[] FAT_buf_ptr;
 
 	// format 2nd cluster (Root)
-	ULONGLONG heap_offset = FAT_offset + FATSz * PHYSICAL_SECTOR_SIZE * 2;
+	ULONGLONG heap_offset = FAT_offset + FATSz * 2;
 	BYTE* heap_buf_ptr = new BYTE[clu_size];
 	memset(heap_buf_ptr, 0, clu_size); // initial to 0
 	if (!SCSISectorIO(hDevice, heap_offset, heap_buf_ptr, clu_size, TRUE)) {
