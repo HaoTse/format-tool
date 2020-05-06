@@ -12,9 +12,6 @@ Copyright (C) 2016 Cisco Systems Inc
 
 #include "SCSI_IO.h"
 
-// The scsi capability of USB2.0
-#define SCSI_CAPABILITY_USB2 8192
-
 BOOL SCSIReadCapacity(HANDLE hDevice, BYTE* capacityBuf) {
 
 	SCSI_PASS_THROUGH_DIRECT sptd;
@@ -52,7 +49,7 @@ DWORD getMaxTransfLen(HANDLE hDrive) {
 
 	int retVal = DeviceIoControl(hDrive, IOCTL_SCSI_GET_CAPABILITIES, NULL, 0, &scap, sizeof(scap), &bytesReturned, NULL);
 	if (!retVal) {
-		//TRACE("\n[Warn] Cannot get SCSI capabilities. Error code = %u.\n", GetLastError());
+		TRACE("\n[Warn] Cannot get SCSI capabilities. Error code = %u.\n", GetLastError());
 		maxTransfLen = SCSI_CAPABILITY_USB2;
 	}
 	else {
@@ -64,7 +61,7 @@ DWORD getMaxTransfLen(HANDLE hDrive) {
 }
 
 // SCSI Read/Write Sector
-BOOL SCSISectorIO(HANDLE hDrive, ULONGLONG offset, LPBYTE buffer, UINT buffSize, BOOLEAN write) {
+BOOL SCSISectorIO(HANDLE hDrive, DWORD maxTransfLen, ULONGLONG offset, LPBYTE buffer, UINT buffSize, BOOLEAN write) {
 	SCSI_PASS_THROUGH_DIRECT srb = { 0 };	// SCSI Request Block Structure
 	DWORD bytesReturned = 0;				// Number of bytes returned
 	DWORD curSize = buffSize;				// Current Transfer Size
@@ -75,8 +72,6 @@ BOOL SCSISectorIO(HANDLE hDrive, ULONGLONG offset, LPBYTE buffer, UINT buffSize,
 		TRACE("\n[Error] Buffer setup error.\n");
 		return FALSE;
 	}
-
-	DWORD maxTransfLen = getMaxTransfLen(hDrive);
 
 	// Inizialize common SCSI_PASS_THROUGH_DIRECT members 
 	RtlZeroMemory(&srb, sizeof(SCSI_PASS_THROUGH_DIRECT));

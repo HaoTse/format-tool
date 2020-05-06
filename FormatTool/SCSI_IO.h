@@ -19,6 +19,10 @@ Copyright (C) 2016 Cisco Systems Inc
 // The physical sector size in bytes
 #define PHYSICAL_SECTOR_SIZE 512
 
+// The scsi capability of USB2.0
+#define SCSI_CAPABILITY_USB2 8192
+#define SCSI_CAPABILITY_USB3 65535
+
 // Command to get capacity of volume
 BOOL SCSIReadCapacity(HANDLE hDevice, BYTE* capacityBuf);
 
@@ -26,7 +30,7 @@ BOOL SCSIReadCapacity(HANDLE hDevice, BYTE* capacityBuf);
 DWORD getMaxTransfLen(HANDLE hDrive);
 
 // SCSI Read/Write Sector
-BOOL SCSISectorIO(HANDLE hDrive, ULONGLONG offset, LPBYTE buffer, UINT buffSize, BOOLEAN write);
+BOOL SCSISectorIO(HANDLE hDrive, DWORD maxTransfLen, ULONGLONG offset, LPBYTE buffer, UINT buffSize, BOOLEAN write);
 
 // Compila il Command Descriptor Block della richiesta di lettura o scrittura a 10 Bytes
 BOOL SCSIBuild10CDB(PSCSI_PASS_THROUGH_DIRECT srb, ULONGLONG offset, ULONG length, BOOLEAN Write);

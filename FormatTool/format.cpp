@@ -47,14 +47,13 @@ void setupDBR(BYTE* buffer, DWORD total_num, DWORD hidden_num, DWORD rsvd_num, D
 			reserved_offset = 0x34, drvNum_offset = 0x40, reserved1_offset = 0x41, bootSig_offset = 0x42, 
 			volID_offset = 0x43, volLab_offset = 0x47, FilSysType_offset = 0x52, unused_offset = 0x5A, sig_offset = 0x1FE;
 	BYTE jumpBoot[3] = { 0xEB, 0x58, 0x90 }, OEMName[8] = { 0x48, 0x61, 0x6F, 0x30, 0x2E, 0x31, 0x20, 0x20 },
-			bytePerSec[2] = { 0 }, secPerClu[1] = { 0 }, rsvdSecCnt[2] = { 0 }, numFATs[1] = { 0x2 },
-			rootEntCnt[2] = { 0 }, totSec16[2] = { 0 },	media[1] = { 0xF8 }, FATSz16[2] = { 0 },
+			bytePerSec[2] = { 0 }, rsvdSecCnt[2] = { 0 }, rootEntCnt[2] = { 0 }, totSec16[2] = { 0 },	FATSz16[2] = { 0 },
 			secPerTrk[2] = { 0 }, numHeads[2] = { 0 }, hidSec[4] = { 0 }, totSec32[4] = { 0 },
 			FATSz32[4] = { 0 }, ExtFlags[2] = { 0 }, FSVer[2] = { 0 }, rootClus[4] = { 0 },
-			FSInfo[2] = { 0 }, bkBootSec[2] = { 0 }, reserved[12] = { 0 }, drvNum[1] = { 0x80 },
-			reserved1[1] = { 0 }, bootSig[1] = { 0x29 }, volID[4] = { 0 },
+			FSInfo[2] = { 0 }, bkBootSec[2] = { 0 }, reserved[12] = { 0 }, volID[4] = { 0 },
 			volLab[11] = { 0x48, 0x61, 0x6F, 0x20, 0x43, 0x68, 0x65, 0x6E, 0x67, 0x20, 0x20 },
 			FilSysType[8] = { 0x46, 0x41, 0x54, 0x33, 0x32, 0x20, 0x20, 0x20 }, unused[420] = {0}, sig[2] = { 0x55, 0xAA };
+	BYTE secPerClu = 0, numFATs = 0x2, media = 0xF8, drvNum = 0x80, reserved1 = 0, bootSig = 0x29;
 
 	// initial bytePerSec (512Bytes)
 	bytePerSec[0] = (BYTE)(PHYSICAL_SECTOR_SIZE);
@@ -62,7 +61,7 @@ void setupDBR(BYTE* buffer, DWORD total_num, DWORD hidden_num, DWORD rsvd_num, D
 
 	// initial secPerClu
 	DWORD sec_cnt = clu_size / PHYSICAL_SECTOR_SIZE;
-	secPerClu[0] = (BYTE)(sec_cnt);
+	secPerClu = (BYTE)(sec_cnt);
 
 	// initial rsvdSecCnt
 	rsvdSecCnt[0] = (BYTE)(rsvd_num);
@@ -96,12 +95,12 @@ void setupDBR(BYTE* buffer, DWORD total_num, DWORD hidden_num, DWORD rsvd_num, D
 	memcpy(buffer + jumpBoot_offset, jumpBoot, sizeof(jumpBoot));
 	memcpy(buffer + OEMName_offset, OEMName, sizeof(OEMName));
 	memcpy(buffer + bytePerSec_offset, bytePerSec, sizeof(bytePerSec));
-	memcpy(buffer + secPerClu_offset, secPerClu, sizeof(secPerClu));
+	buffer[secPerClu_offset] = secPerClu;
 	memcpy(buffer + rsvdSecCnt_offset, rsvdSecCnt, sizeof(rsvdSecCnt));
-	memcpy(buffer + numFATs_offset, numFATs, sizeof(numFATs));
+	buffer[numFATs_offset] = numFATs;
 	memcpy(buffer + rootEntCnt_offset, rootEntCnt, sizeof(rootEntCnt));
 	memcpy(buffer + totSec16_offset, totSec16, sizeof(totSec16));
-	memcpy(buffer + media_offset, media, sizeof(media));
+	buffer[media_offset] = media;
 	memcpy(buffer + FATSz16_offset, FATSz16, sizeof(FATSz16));
 	memcpy(buffer + secPerTrk_offset, secPerTrk, sizeof(secPerTrk));
 	memcpy(buffer + numHeads_offset, numHeads, sizeof(numHeads));
@@ -114,9 +113,9 @@ void setupDBR(BYTE* buffer, DWORD total_num, DWORD hidden_num, DWORD rsvd_num, D
 	memcpy(buffer + FSInfo_offset, FSInfo, sizeof(FSInfo));
 	memcpy(buffer + bkBootSec_offset, bkBootSec, sizeof(bkBootSec));
 	memcpy(buffer + reserved_offset, reserved, sizeof(reserved));
-	memcpy(buffer + drvNum_offset, drvNum, sizeof(drvNum));
-	memcpy(buffer + reserved1_offset, reserved1, sizeof(reserved1));
-	memcpy(buffer + bootSig_offset, bootSig, sizeof(bootSig));
+	buffer[drvNum_offset] = drvNum;
+	buffer[reserved1_offset] = reserved1;
+	buffer[bootSig_offset] = bootSig;
 	memcpy(buffer + volID_offset, volID, sizeof(volID));
 	memcpy(buffer + volLab_offset, volLab, sizeof(volLab));
 	memcpy(buffer + FilSysType_offset, FilSysType, sizeof(FilSysType));
@@ -184,6 +183,7 @@ DWORD getCapacity(HANDLE hDevice) {
 
 BOOL format(HANDLE hDevice, DWORD totalSec_num, bool ifMBR, DWORD hidSec_num, DWORD rsvdSec_num, DWORD clu_size) {
 	DWORD bytes_returned = 0;
+	DWORD max_transf_len = getMaxTransfLen(hDevice);
 
 	// lock volume
 	if (!DeviceIoControl(hDevice, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0, &bytes_returned, NULL)) {
@@ -196,53 +196,103 @@ BOOL format(HANDLE hDevice, DWORD totalSec_num, bool ifMBR, DWORD hidSec_num, DW
 		BYTE MBR_buf[PHYSICAL_SECTOR_SIZE];
 		memset(MBR_buf, 0, PHYSICAL_SECTOR_SIZE);
 		setupMBR(MBR_buf, totalSec_num, hidSec_num);
-		if (!SCSISectorIO(hDevice, 0, MBR_buf, PHYSICAL_SECTOR_SIZE, TRUE)) {
+		if (!SCSISectorIO(hDevice, max_transf_len, 0, MBR_buf, PHYSICAL_SECTOR_SIZE, TRUE)) {
 			TRACE("\n[Error] Format MBR failed.\n");
 			return FALSE;
 		}
 	}
 
 	// format DBR, FSINFO, and backup
-	DWORD rsvd_format_sec = (rsvdSec_num > 10) ? 10 : rsvdSec_num;
-	ULONGLONG rsvd_buf_size = (ULONGLONG)rsvd_format_sec * PHYSICAL_SECTOR_SIZE,
-			rsvd_offset = (ULONGLONG)hidSec_num * PHYSICAL_SECTOR_SIZE;
-	BYTE* rsvd_buf_ptr = new BYTE[rsvd_buf_size];
-	memset(rsvd_buf_ptr, 0, rsvd_buf_size); // initial to 0
-
-	// initial DBR
-	BYTE DBR_buf[PHYSICAL_SECTOR_SIZE];
-	memset(DBR_buf, 0, PHYSICAL_SECTOR_SIZE);
+	BYTE* rsvd_buf = new BYTE[max_transf_len];
+	ULONGLONG rsvd_offset = (ULONGLONG)hidSec_num * PHYSICAL_SECTOR_SIZE;
+	memset(rsvd_buf, 0, max_transf_len);
+	
+	// init DBR
+	BYTE DBR_buf[PHYSICAL_SECTOR_SIZE] = { 0 };
 	setupDBR(DBR_buf, totalSec_num, hidSec_num, rsvdSec_num, clu_size);
-	memcpy(rsvd_buf_ptr, DBR_buf, PHYSICAL_SECTOR_SIZE);
+	memcpy(rsvd_buf, DBR_buf, PHYSICAL_SECTOR_SIZE);
 
-	if (!SCSISectorIO(hDevice, rsvd_offset, rsvd_buf_ptr, rsvd_buf_size, TRUE)) {
+	DWORD rsvd_needed_format = (rsvdSec_num > 10) ? 10 : rsvdSec_num;
+	rsvd_needed_format = rsvd_needed_format * PHYSICAL_SECTOR_SIZE;
+	if (!SCSISectorIO(hDevice, max_transf_len, rsvd_offset, rsvd_buf, rsvd_needed_format, TRUE)) {
 		TRACE("\n[Error] Format DBR failed.\n");
 		return FALSE;
 	}
-	
-	delete[] rsvd_buf_ptr;
 
+	delete[] rsvd_buf;
 
 	// format FAT
 	ULONGLONG FAT_offset = rsvd_offset + (ULONGLONG)rsvdSec_num * PHYSICAL_SECTOR_SIZE;
-	ULONGLONG FATSz = computeFATSz(totalSec_num, hidSec_num, rsvdSec_num, clu_size, PHYSICAL_SECTOR_SIZE, 2) * PHYSICAL_SECTOR_SIZE;
+	ULONGLONG FATSz_bytes = computeFATSz(totalSec_num, hidSec_num, rsvdSec_num, clu_size, PHYSICAL_SECTOR_SIZE, 2) * PHYSICAL_SECTOR_SIZE;
+	ULONGLONG FAT2_offset = FAT_offset + FATSz_bytes;
+	BYTE* FAT_buf = new BYTE[max_transf_len];
 	BYTE FAT_entry[12] = { 0xF8, 0xFF, 0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F };
-	BYTE* FAT_buf_ptr = new BYTE[FATSz * 2];
-	memset(FAT_buf_ptr, 0, FATSz * 2); // initial to 0
-	memcpy(FAT_buf_ptr, FAT_entry, 12);
-	memcpy(FAT_buf_ptr + FATSz, FAT_entry, 12);
-	if (!SCSISectorIO(hDevice, FAT_offset, FAT_buf_ptr, FATSz * 2, TRUE)) {
-		TRACE("\n[Error] Format FAT failed.\n");
-		return FALSE;
+	
+	memset(FAT_buf, 0, max_transf_len);
+	memcpy(FAT_buf, FAT_entry, 12);
+	if (FATSz_bytes > max_transf_len) {
+		// format FAT1
+		if (!SCSISectorIO(hDevice, max_transf_len, FAT_offset, FAT_buf, max_transf_len, TRUE)) {
+			TRACE("\n[Error] Format FAT1 failed.\n");
+			return FALSE;
+		}
+		// format FAT2
+		if (!SCSISectorIO(hDevice, max_transf_len, FAT2_offset, FAT_buf, max_transf_len, TRUE)) {
+			TRACE("\n[Error] Format FAT2 failed.\n");
+			return FALSE;
+		}
+
+		// empty FAT entry
+		memset(FAT_buf, 0, 12);
+		ULONGLONG needed_format_size = FATSz_bytes - max_transf_len;
+		DWORD format_cnt = 1;
+		while (needed_format_size > max_transf_len) {
+			ULONGLONG relate_FAT_entry_offset = (ULONGLONG)format_cnt * max_transf_len;
+			if (!SCSISectorIO(hDevice, max_transf_len, FAT_offset + relate_FAT_entry_offset, FAT_buf, max_transf_len, TRUE)) {
+				TRACE("\n[Error] Format FAT1 failed.\n");
+				return FALSE;
+			}
+			if (!SCSISectorIO(hDevice, max_transf_len, FAT2_offset + relate_FAT_entry_offset, FAT_buf, max_transf_len, TRUE)) {
+				TRACE("\n[Error] Format FAT2 failed.\n");
+				return FALSE;
+			}
+			needed_format_size -= max_transf_len;
+			format_cnt++;
+		}
+		// check remaining
+		if (needed_format_size > 0) {
+			ULONGLONG relate_FAT_entry_offset = (ULONGLONG)format_cnt * max_transf_len;
+			if (!SCSISectorIO(hDevice, max_transf_len, FAT_offset + relate_FAT_entry_offset, FAT_buf, (DWORD)needed_format_size, TRUE)) {
+				TRACE("\n[Error] Format FAT1 failed.\n");
+				return FALSE;
+			}
+			if (!SCSISectorIO(hDevice, max_transf_len, FAT2_offset + relate_FAT_entry_offset, FAT_buf, (DWORD)needed_format_size, TRUE)) {
+				TRACE("\n[Error] Format FAT2 failed.\n");
+				return FALSE;
+			}
+		}
+
+	}
+	else {
+		// format FAT1
+		if (!SCSISectorIO(hDevice, max_transf_len, FAT_offset, FAT_buf, (DWORD)FATSz_bytes, TRUE)) {
+			TRACE("\n[Error] Format FAT1 failed.\n");
+			return FALSE;
+		}
+		// format FAT2
+		if (!SCSISectorIO(hDevice, max_transf_len, FAT_offset + FATSz_bytes, FAT_buf, (DWORD)FATSz_bytes, TRUE)) {
+			TRACE("\n[Error] Format FAT2 failed.\n");
+			return FALSE;
+		}
 	}
 
-	delete[] FAT_buf_ptr;
+	delete[] FAT_buf;
 
 	// format 2nd cluster (Root)
-	ULONGLONG heap_offset = FAT_offset + FATSz * 2;
+	ULONGLONG heap_offset = FAT_offset + FATSz_bytes * 2;
 	BYTE* heap_buf_ptr = new BYTE[clu_size];
-	memset(heap_buf_ptr, 0, clu_size); // initial to 0
-	if (!SCSISectorIO(hDevice, heap_offset, heap_buf_ptr, clu_size, TRUE)) {
+	memset(heap_buf_ptr, 0, clu_size);
+	if (!SCSISectorIO(hDevice, max_transf_len, heap_offset, heap_buf_ptr, clu_size, TRUE)) {
 		TRACE("\n[Error] Format ROOT cluster failed.\n");
 		return FALSE;
 	}
