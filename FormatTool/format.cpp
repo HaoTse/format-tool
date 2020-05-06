@@ -191,6 +191,12 @@ BOOL format(HANDLE hDevice, DWORD totalSec_num, bool ifMBR, DWORD hidSec_num, DW
 		return FALSE;
 	}
 
+	// dismount volume
+	if (!DeviceIoControl(hDevice, FSCTL_DISMOUNT_VOLUME, NULL, 0, NULL, 0, &bytes_returned, NULL)) {
+		TRACE("\n[Error] FSCTL_DISMOUNT_VOLUME failed. Error code = %u\n", GetLastError());
+		return FALSE;
+	}
+
 	// format MBR
 	if (ifMBR) {
 		BYTE MBR_buf[PHYSICAL_SECTOR_SIZE];
@@ -299,11 +305,7 @@ BOOL format(HANDLE hDevice, DWORD totalSec_num, bool ifMBR, DWORD hidSec_num, DW
 
 	delete[] heap_buf_ptr;
 
-	// dismount volume
-	if (!DeviceIoControl(hDevice, FSCTL_DISMOUNT_VOLUME, NULL, 0, NULL, 0, &bytes_returned, NULL)) {
-		TRACE("\n[Error] FSCTL_DISMOUNT_VOLUME failed. Error code = %u\n", GetLastError());
-		return FALSE;
-	}
+	
 	// unlock volume
 	if (!DeviceIoControl(hDevice, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0, &bytes_returned, NULL)) {
 		TRACE("\n[Error] FSCTL_UNLOCK_VOLUME failed. Error code = %u\n", GetLastError());
