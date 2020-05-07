@@ -44,7 +44,7 @@ int enum_usb_disk(char usb_paths[], DWORD usb_capacity[], int cnt)
 					return -1;
 				}
 				DWORD capacity_sec = getCapacity(hDevice);
-				if (capacity_sec == 0) {
+				if (capacity_sec == 0xFFFFFFFF) {
 					CloseHandle(hDevice);
 					continue; // skip invalid device (include card reader)
 				}
