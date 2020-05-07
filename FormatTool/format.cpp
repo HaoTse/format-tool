@@ -174,6 +174,11 @@ DWORD getCapacity(HANDLE hDevice) {
 	TRACE("\n[Msg] Sectors number: % d\n", sectors_num);
 	TRACE("\n[Msg] Bytes per sectors: % d\n", bytesPerSecotr);
 
+	// check if valid volume
+	if (bytesPerSecotr > 4096) {
+		return 0xFFFFFFFF;
+	}
+
 	if (bytesPerSecotr != PHYSICAL_SECTOR_SIZE) {
 		TRACE("\n[Warn] PHYSICAL_SECTOR_SIZE is not equal to block length!\n");
 	}
