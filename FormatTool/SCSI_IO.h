@@ -20,8 +20,7 @@ Copyright (C) 2016 Cisco Systems Inc
 #define PHYSICAL_SECTOR_SIZE 512
 
 // The scsi capability of USB2.0
-#define SCSI_CAPABILITY_USB2 8192
-#define SCSI_CAPABILITY_USB3 65535
+#define SCSI_CAPABILITY_USB2 65536
 
 // Command to get capacity of volume
 BOOL SCSIReadCapacity(HANDLE hDevice, BYTE* capacityBuf);
